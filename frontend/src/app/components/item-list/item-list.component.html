@@ -1,0 +1,30 @@
+<div class="item-list-container">
+  <h2>Items</h2>
+  
+  <div *ngIf="loading" class="loading">
+    Loading items...
+  </div>
+  
+  <div *ngIf="error" class="error-message">
+    {{ error }}
+    <button (click)="getItems()">Try Again</button>
+  </div>
+  
+  <div *ngIf="!loading && !error && items.length === 0" class="no-items">
+    No items found.
+  </div>
+  
+  <ul *ngIf="!loading && !error && items.length > 0" class="items-list">
+    <li *ngFor="let item of items" class="item-card">
+      <div class="item-header">
+        <h3>{{ item.name }}</h3>
+      </div>
+      <div class="item-body">
+        <p>{{ item.description || 'No description available' }}</p>
+      </div>
+      <div class="item-footer">
+        <a [routerLink]="['/items', item.id]" class="view-details-btn">View Details</a>
+      </div>
+    </li>
+  </ul>
+</div>

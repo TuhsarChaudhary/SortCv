@@ -1,0 +1,32 @@
+# Python bytecode and cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+venv/
+ENV/
+.env
+.env.*
+
+# IDE / editor folders
+.vscode/
+.idea/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+
+# SQLite & other local databases
+*.db
+
+# Uploaded / generated media
+backend/app/static/media_files/
+
+# Logs
+*.log
+
+# Alembic migration cache
+backend/alembic/versions/*.pyc

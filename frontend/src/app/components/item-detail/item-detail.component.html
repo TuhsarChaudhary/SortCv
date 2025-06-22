@@ -1,0 +1,24 @@
+<div class="item-detail-container">
+  <button class="back-button" (click)="goBack()">&larr; Back to Items</button>
+  
+  <div *ngIf="loading" class="loading">
+    Loading item details...
+  </div>
+  
+  <div *ngIf="error" class="error-message">
+    {{ error }}
+    <button (click)="getItem()">Try Again</button>
+  </div>
+  
+  <div *ngIf="!loading && !error && !item" class="not-found">
+    Item not found.
+  </div>
+  
+  <div *ngIf="!loading && !error && item" class="item-details">
+    <h2>{{ item.name }}</h2>
+    <div class="item-info">
+      <p><strong>ID:</strong> {{ item.id }}</p>
+      <p><strong>Description:</strong> {{ item.description || 'No description available' }}</p>
+    </div>
+  </div>
+</div>

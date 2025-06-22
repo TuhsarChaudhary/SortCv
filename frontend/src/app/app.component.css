@@ -1,0 +1,50 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
+
+header {
+  padding: 20px 0;
+  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+header h1 {
+  margin: 0;
+  color: #333;
+}
+
+nav ul {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 15px 0 0;
+}
+
+nav ul li {
+  margin-right: 20px;
+}
+
+nav ul li a {
+  text-decoration: none;
+  color: #0066cc;
+  font-weight: 500;
+}
+
+nav ul li a.active {
+  color: #004080;
+  border-bottom: 2px solid #004080;
+}
+
+main {
+  min-height: 70vh;
+  padding: 20px 0;
+}
+
+footer {
+  padding: 20px 0;
+  border-top: 1px solid #e0e0e0;
+  text-align: center;
+  color: #666;
+}
