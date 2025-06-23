@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 from typing import Any
 from app.core.email_utils import send_email
@@ -64,6 +64,7 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
         hashed_password=get_password_hash(user_in.password),
         is_active=True,
         is_admin=False
+        # cv_access = False
     )
     
     db.add(db_user)
@@ -113,7 +114,7 @@ def login_init(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
     #Generate OTP and Save
     otp = f"{random.randint(0, 999999):06d}"
     otp_hash = get_password_hash(otp)
-    expires_at = datetime.utcnow() + timedelta(minutes=2)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
     
     otp_entry = PasswordResetOTP(user_id=user.id, otp_hash=otp_hash, expires_at=expires_at)
     db.add(otp_entry)
@@ -121,7 +122,7 @@ def login_init(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
 
     #Send OTP
     try:
-        send_email(user.email, "Login OTP for SortCV", f"Your OTP is {otp}. It expires in 2 minutes.")
+        send_email(user.email, "Login OTP for SortCV", f"Your OTP is {otp}. It expires in 5 minutes.")
 
     except RuntimeError as exc:
         # Rollback OTP creation so user can retry
@@ -142,7 +143,7 @@ def login_verify(user_id: int = Form(...), otp: str = Form(...), db: Session = D
         .filter(
             PasswordResetOTP.user_id == user.id,
             PasswordResetOTP.used == False,
-            PasswordResetOTP.expires_at > datetime.utcnow(),
+            PasswordResetOTP.expires_at > datetime.now(timezone.utc),
         )
         .order_by(PasswordResetOTP.expires_at.desc())
         .first()
@@ -188,7 +189,7 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         send_email(
                 to_email=user.email,
                 subject="Reset your SortCV password",
-                body=f"Click this link to reset your password:\n{reset_url}\n\nLink expires in 2 minutes.",
+                body=f"Click this link to reset your password:\n{reset_url}\n\nLink expires in 5 minutes.",
             )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))

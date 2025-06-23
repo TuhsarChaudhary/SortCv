@@ -8,6 +8,9 @@ from app.db.database import Base, engine
 from dotenv import load_dotenv
 load_dotenv()
 
+from app.middleware.log_response_time import LogResponseTimeMiddleware
+from app.middleware.error_notifier import ErrorNotifierMiddleware
+
 # Create all tables in the database
 Base.metadata.create_all(bind=engine)
 
@@ -16,6 +19,7 @@ app = FastAPI(
 )
 
 # Configure CORS
+# CORS first
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:4200"],
@@ -23,6 +27,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Custom middlewares
+app.add_middleware(LogResponseTimeMiddleware)
+app.add_middleware(ErrorNotifierMiddleware)
 
 # Include routers
 app.include_router(auth.router, prefix="/api", tags=["auth"])

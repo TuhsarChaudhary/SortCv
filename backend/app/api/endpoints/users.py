@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Any, List
+from pydantic import BaseModel
 
 from app.db.database import get_db
 from app.core.security import get_current_admin_user, get_password_hash
 from app.models.user import User
 from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
+from app.schemas.user_summary import UserSummary
 
 router = APIRouter()
 
-@router.get("/", response_model=List[UserSchema])
+@router.get("/", response_model=List[UserSummary])
 def read_users(
     skip: int = 0,
     limit: int = 100,
@@ -20,11 +22,48 @@ def read_users(
     Retrieve users. Admin only.
     """
     users = db.query(User).offset(skip).limit(limit).all()
-    return users
+    summaries = [
+        UserSummary(
+            id=user.id,
+            name=f"{user.fname} {user.lname}",
+            email=user.email,
+            phone=user.phone,
+            cv_access=user.cv_access
+        )
+        for user in users
+    ]
+    return summaries
 
-@router.post("/", response_model=UserSchema)
+
+class CVAccessUpdate(BaseModel):
+    cv_access: bool
+
+
+@router.patch("/{user_id}/cv-access", response_model=UserSummary)
+def approve_cv_access(
+    user_id: int,
+    payload: CVAccessUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+) -> Any:
+    """Approve or revoke CV access for a user (admin only)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user.cv_access = payload.cv_access
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return UserSummary(
+        name=f"{user.fname} {user.lname}",
+        email=user.email,
+        phone=user.phone,
+        cv_access=user.cv_access,
+    )
+
+# @router.post("/", response_model=UserSchema)
 def create_user(
-    user_in: UserCreate,
+    user_in: UserCreate,  
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
 ) -> Any:
@@ -69,7 +108,7 @@ def create_user(
     
     return db_user
 
-@router.get("/{user_id}", response_model=UserSchema)
+# @router.get("/{user_id}", response_model=UserSchema)
 def read_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -86,7 +125,7 @@ def read_user(
         )
     return user
 
-@router.put("/{user_id}", response_model=UserSchema)
+# @router.put("/{user_id}", response_model=UserSchema)
 def update_user(
     user_id: int,
     user_in: UserUpdate,
@@ -132,7 +171,7 @@ def update_user(
     
     return user
 
-@router.delete("/{user_id}", response_model=UserSchema)
+# @router.delete("/{user_id}", response_model=UserSchema)
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
