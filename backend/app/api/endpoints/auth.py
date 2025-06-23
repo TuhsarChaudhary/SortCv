@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import random
 from typing import Any
 from app.core.email_utils import send_email
+from app.core.security import create_access_token, SECRET_KEY, ALGORITHM
+from jose import jwt, JWTError
 
 from app.db.database import get_db
 from app.core.security import (
@@ -96,8 +98,8 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         "is_admin": user.is_admin
     }
 
-@router.post("/login")
-def login(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
+@router.post("/login/init")
+def login_init(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
     """
     Regular login endpoint for frontend applications.
     """
@@ -107,54 +109,33 @@ def login(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
         )
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
-    )
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "fname": user.fname,
-            "lname": user.lname,
-            "is_admin": user.is_admin
-        }
-    }
 
-@router.post("/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)) -> Any:
-    # Always return success to avoid email enumeration
-    user = db.query(User).filter(User.email == request.email).first()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User with this email does not exist")
-
+    #Generate OTP and Save
     otp = f"{random.randint(0, 999999):06d}"
     otp_hash = get_password_hash(otp)
-    expires_at = datetime.utcnow() + timedelta(minutes=10)
+    expires_at = datetime.utcnow() + timedelta(minutes=2)
+    
     otp_entry = PasswordResetOTP(user_id=user.id, otp_hash=otp_hash, expires_at=expires_at)
     db.add(otp_entry)
     db.commit()
 
+    #Send OTP
     try:
-        send_email(user.email, "Password Reset OTP for SortCV", f"Your OTP is {otp}. It expires in 10 minutes.")
+        send_email(user.email, "Login OTP for SortCV", f"Your OTP is {otp}. It expires in 2 minutes.")
+
     except RuntimeError as exc:
         # Rollback OTP creation so user can retry
         db.delete(otp_entry)
         db.commit()
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
-    return {"message": "OTP sent successfully"}
+    return {"message": "OTP sent successfully", "user_id": user.id}
 
-
-@router.post("/reset-password", response_model=UserSchema)
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)) -> Any:
-    user = db.query(User).filter(User.email == request.email).first()
+@router.post("/login/verify")
+def login_verify(user_id: int = Form(...), otp: str = Form(...), db: Session = Depends(get_db)) -> Any: 
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     otp_entry = (
         db.query(PasswordResetOTP)
@@ -167,15 +148,78 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
         .first()
     )
 
-    if not otp_entry or not verify_password(request.otp, otp_entry.otp_hash):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid email or OTP")
+    if not otp_entry or not verify_password(otp, otp_entry.otp_hash):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
 
     otp_entry.used = True
-    user.hashed_password = get_password_hash(request.new_password)
     db.commit()
-    db.refresh(user)
-    return user
 
+    #JWt Token Issued here
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user.id,
+        "email": user.email,
+        "fname": user.fname,
+        "lname": user.lname,
+        "is_admin": user.is_admin
+    }  
+
+@router.post("/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)) -> Any:
+    # Always return success to avoid email enumeration
+    user = db.query(User).filter(User.email == request.email).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User with this email does not exist")
+
+    token = create_access_token(
+        data={"sub": user.email},
+        expires_delta=timedelta(minutes=5)
+    )
+
+    reset_url = f"https://CV-RANKING.com/change-password?token={token}"
+
+    try:
+        send_email(
+                to_email=user.email,
+                subject="Reset your SortCV password",
+                body=f"Click this link to reset your password:\n{reset_url}\n\nLink expires in 2 minutes.",
+            )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    return {"message": "Password reset email sent successfully"}
+
+
+@router.post("/reset-password-link")
+async def reset_password_via_link(
+    token: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: Session = Depends(get_db)
+    ) -> Any:
+    if new_password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.hashed_password = get_password_hash(new_password)
+    db.commit()
+
+    return {"message": "Password reset successful. Please login again."}
 
 
 @router.post("/auth/change-password", response_model=UserSchema)

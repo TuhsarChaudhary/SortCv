@@ -86,8 +86,6 @@ class UserInDB(UserBase):
 
 class User(UserInDB):
     pass  # retains all fields
-    pass
-
 
 class UserLogin(BaseModel):
     email: EmailStr

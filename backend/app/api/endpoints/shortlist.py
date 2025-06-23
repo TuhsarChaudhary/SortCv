@@ -18,7 +18,7 @@ MEDIA_FOLDER = os.path.join("app", "static", "media_files")
 
 os.makedirs(MEDIA_FOLDER, exist_ok=True)
 
-# 🔧 Plug-in: replace this with actual imported function from your module
+# Plug-in: replace this with actual imported function from your module
 def perform_shortlisting(filtered_df: pd.DataFrame, jd_file_path: str, filters: dict):
     # 1. parse JD file internally
     jd_df = pd.DataFrame({
@@ -44,7 +44,7 @@ async def shortlist_candidates(
     current_user: User = Depends(get_current_cv_user)
 ):
 
-    # ✅ Fetch resume record & its filtered list
+    # Fetch resume record & its filtered list
     resume_record: Optional[ResumePDF] = db.query(ResumePDF).filter(ResumePDF.id == pdf_id).first()
     if resume_record is None or resume_record.long_listing_csv is None:
         raise HTTPException(status_code=404, detail="Filtered list not found for given resume")
@@ -63,12 +63,12 @@ async def shortlist_candidates(
     except pd.errors.EmptyDataError:
         raise HTTPException(status_code=400, detail="CSV is empty – ensure you saved filters before shortlisting")
 
-    # ✅ Save JD PDF
+    # Save JD PDF
     jd_file_path = os.path.join(MEDIA_FOLDER, jd_file.filename)
     with open(jd_file_path, "wb") as buffer:
         shutil.copyfileobj(jd_file.file, buffer)
 
-    # ✅ Extract user filters from form
+    # Extract user filters from form
     if isinstance(skills, str):
         # Handle comma-separated string or bracketed list string
         skills_parsed = [s.strip() for s in skills.strip("[]").split(",") if s.strip()]
@@ -82,23 +82,23 @@ async def shortlist_candidates(
     }
 
 
-    # ✅ Call module function: get parsed JD and final shortlisted list
+    # Call module function: get parsed JD and final shortlisted list
     try:
         jd_df, shortlisted_df = perform_shortlisting(filtered_df, jd_file_path, user_filters)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Shortlisting failed: {str(e)}")
 
-    # ✅ Save final shortlisted result as CSV
+    # Save final shortlisted result as CSV
     shortlist_name = f"{Path(resume_record.pdf_name).stem}_shortlist.csv"
     shortlist_path = os.path.join(MEDIA_FOLDER, shortlist_name)
     shortlisted_df.to_csv(shortlist_path, index=False)
 
-    # ✅ Update DB paths
+    # Update DB paths
     resume_record.job_desc_path = jd_file_path
     resume_record.short_listing_csv = shortlist_path
     db.commit()
 
-    # ✅ Return both as JSON
+    # Return both as JSON
     return {
         "message": "Shortlisting successful",
         "jd_data": jd_df.to_dict(orient="records"),

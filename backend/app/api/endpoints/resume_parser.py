@@ -15,11 +15,11 @@ from app.models.resume_pdf import ResumePDF
 
 router = APIRouter()
 
-# ✅ Define correct relative path
+# Define correct relative path
 MEDIA_FOLDER = os.path.join("app", "static", "media_files")
 os.makedirs(MEDIA_FOLDER, exist_ok=True)
 
-# 📌 Placeholder function for now
+# Placeholder function for now
 def parse_pdf_to_df(file_path: str) -> pd.DataFrame:
     # Simulate longlist from a parsed PDF
     data = {
@@ -45,11 +45,11 @@ async def upload_resume(
     return the cached result from the database / filesystem instead.
     """
 
-    # 0️⃣ Read file bytes & compute SHA-256 hash to reliably identify duplicates
+    # Read file bytes & compute SHA-256 hash to reliably identify duplicates
     file_bytes = await cv_file.read()
     pdf_hash = hashlib.sha256(file_bytes).hexdigest()
 
-    # 1️⃣ Check if this exact resume was already handled earlier via hash
+    # Check if this exact resume was already handled earlier via hash
     existing: Optional[ResumePDF] = (
         db.query(ResumePDF).filter(ResumePDF.pdf_hash == pdf_hash).first()
     )
@@ -66,23 +66,23 @@ async def upload_resume(
             # CSV was removed from disk for some reason – fall through to re-process
             pass
 
-    # ✅ Step 1: Save uploaded file to the media folder
+    # Step 1: Save uploaded file to the media folder
     pdf_path = os.path.join(MEDIA_FOLDER, cv_file.filename)
     with open(pdf_path, "wb") as buffer:
         buffer.write(file_bytes)
 
-    # ✅ Step 2: Parse file to DataFrame
+    # Step 2: Parse file to DataFrame
     try:
         df = parse_pdf_to_df(pdf_path)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error parsing PDF: {str(e)}")
 
-    # ✅ Step 3: Save DataFrame as CSV
+    # Step 3: Save DataFrame as CSV
     csv_file_name = f"{Path(cv_file.filename).stem}_longlist.csv"
     csv_path = os.path.join(MEDIA_FOLDER, csv_file_name)
     df.to_csv(csv_path, index=False)
 
-    # ✅ Step 4: Persist artefact info in DB (short-listing still empty)
+    # Step 4: Persist artefact info in DB (short-listing still empty)
     new_entry = ResumePDF(
         pdf_name=cv_file.filename,
         pdf_hash=pdf_hash,
@@ -97,7 +97,7 @@ async def upload_resume(
     db.commit()
     db.refresh(new_entry)
 
-    # ✅ Step 5: Return JSON response
+    # Step 5: Return JSON response
     return {
         "message": "Resume parsed successfully",
         "pdf_id": new_entry.id,

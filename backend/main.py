@@ -11,34 +11,6 @@ load_dotenv()
 # Create all tables in the database
 Base.metadata.create_all(bind=engine)
 
-# in main.py, after tables are created
-from app.core.security import get_password_hash
-from app.models.user import User
-from app.db.database import SessionLocal
-from datetime import date
-
-def ensure_admin():
-    db = SessionLocal()
-    if not db.query(User).filter(User.is_admin == True).first():
-        admin = User(
-            fname="Admin",
-            lname="User",
-            email="admin@example.com",
-            phone="+10000000000",
-            dateofbirth=date(1990, 1, 1),
-            gender="other",
-            country="N/A",
-            nationality="N/A",
-            hashed_password=get_password_hash("Admin@12345"),
-            is_admin=True,
-            cv_access=True,
-        )
-        db.add(admin)
-        db.commit()
-    db.close()
-
-ensure_admin()
-
 app = FastAPI(
     title="CvSorter"
 )
