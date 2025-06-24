@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
@@ -27,6 +28,15 @@ from app.schemas.user import (
     ResetPasswordRequest,
     ChangePasswordRequest,
 )
+
+class OTPVerifyRequest(BaseModel):
+    user_id: int
+    otp: str
+
+class PasswordResetLinkRequest(BaseModel):
+    token: str
+    new_password: str
+    confirm_password: str
 
 router = APIRouter()
 
@@ -129,9 +139,9 @@ def login(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
     return {"message": "OTP sent successfully", "user_id": user.id}
 
 @router.post("/login-verify")
-def login_verify(user_id: int = Form(...), otp: str = Form(...), db: Session = Depends(get_db)) -> Any: 
+def login_verify(payload: OTPVerifyRequest, db: Session = Depends(get_db)) -> Any: 
     """Verify OTP for login"""
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
@@ -146,7 +156,7 @@ def login_verify(user_id: int = Form(...), otp: str = Form(...), db: Session = D
         .first()
     )
 
-    if not otp_entry or not verify_password(otp, otp_entry.otp_hash):
+    if not otp_entry or not verify_password(payload.otp, otp_entry.otp_hash):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
 
     otp_entry.used = True
@@ -196,19 +206,14 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
 
 
 @router.post("/change-password")
-async def change_password_via_link(
-    token: str = Form(...),
-    new_password: str = Form(...),
-    confirm_password: str = Form(...),
-    db: Session = Depends(get_db)
-    ) -> Any:
+async def change_password_via_link(payload: PasswordResetLinkRequest, db: Session = Depends(get_db)) -> Any:
     """reset the password of user"""
-    if new_password != confirm_password:
+    if payload.new_password != payload.confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
+        payload_data = jwt.decode(payload.token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload_data.get("sub")
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -216,7 +221,7 @@ async def change_password_via_link(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.hashed_password = get_password_hash(new_password)
+    user.hashed_password = get_password_hash(payload.new_password)
     db.commit()
 
     return {"message": "Password reset successful. Please login again."}

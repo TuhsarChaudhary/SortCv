@@ -16,28 +16,36 @@ from sqlalchemy.orm import Session
 
 from app.models.resume_pdf import ResumePDF
 from app.repositories import resume_repo
+from llmod import extract_all
 
-# Re-use existing media folder location
-MEDIA_FOLDER = Path("app/static/media_files")
+# Configure media folder via environment variable so deployments (e.g. AWS) can override
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # backend directory
+MEDIA_FOLDER_ENV = os.getenv("MEDIA_FOLDER")
+if MEDIA_FOLDER_ENV:
+    MEDIA_FOLDER = Path(MEDIA_FOLDER_ENV)
+else:
+    MEDIA_FOLDER = PROJECT_ROOT / "app" / "static" / "media_files"
+
+# Ensure the directory exists
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Placeholder PDF → DataFrame parser (keep behaviour unchanged)
 # ---------------------------------------------------------------------------
 
-def parse_pdf_to_df(file_path: str | Path) -> pd.DataFrame:
-    """TEMP stub – returns a mocked DataFrame.
-    Replace with real parser when available.
-    """
-    data = {
-        "CV ID": ["CV 2", "CV 5", "CV 7"],
-        "Name": ["Sushil Kumar", "Piyush Singh", "Vivek Mathur"],
-        "Highest Degree": ["Bachelors Degree", "Masters Degree", "Masters Degree"],
-        "YOE": [12, 4, 4],
-        "Gender": ["Male", "Male", "Male"],
-        "Nationality": ["India", "India", "India"],
-    }
-    return pd.DataFrame(data)
+# def parse_pdf_to_df(file_path: str | Path) -> pd.DataFrame:
+#     """TEMP stub – returns a mocked DataFrame.
+#     Replace with real parser when available.
+#     """
+#     data = {
+#         "CV ID": ["CV 2", "CV 5", "CV 7"],
+#         "Name": ["Sushil Kumar", "Piyush Singh", "Vivek Mathur"],
+#         "Highest Degree": ["Bachelors Degree", "Masters Degree", "Masters Degree"],
+#         "YOE": [12, 4, 4],
+#         "Gender": ["Male", "Male", "Male"],
+#         "Nationality": ["India", "India", "India"],
+#     }
+#     return pd.DataFrame(data)
 
 # ---------------------------------------------------------------------------
 # Public service functions used by routers
@@ -70,7 +78,8 @@ def upload_resume(
     pdf_path.write_bytes(file_bytes)
 
     # 3) Parse
-    df = parse_pdf_to_df(pdf_path)
+    # df = parse_pdf_to_df(pdf_path)
+    df = extract_all(pdf_path)
 
     # 4) Save CSV
     csv_path = MEDIA_FOLDER / f"{pdf_path.stem}_longlist.csv"
