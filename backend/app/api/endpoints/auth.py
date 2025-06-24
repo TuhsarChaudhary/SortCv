@@ -32,9 +32,7 @@ router = APIRouter()
 
 @router.post("/register", response_model=UserSchema)
 def register_user(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
-    """
-    Register a new user.
-    """
+    """Register a new user."""
     # Check if user with this email exists
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
@@ -99,11 +97,9 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         "is_admin": user.is_admin
     }
 
-@router.post("/login/init")
-def login_init(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
-    """
-    Regular login endpoint for frontend applications.
-    """
+@router.post("/login")
+def login(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
+    """Regular login endpoint for frontend applications."""
     user = authenticate_user(db, user_login.email, user_login.password)
     if not user:
         raise HTTPException(
@@ -132,8 +128,9 @@ def login_init(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
 
     return {"message": "OTP sent successfully", "user_id": user.id}
 
-@router.post("/login/verify")
+@router.post("/login-verify")
 def login_verify(user_id: int = Form(...), otp: str = Form(...), db: Session = Depends(get_db)) -> Any: 
+    """Verify OTP for login"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -173,6 +170,7 @@ def login_verify(user_id: int = Form(...), otp: str = Form(...), db: Session = D
 
 @router.post("/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)) -> Any:
+    """Send password reset email"""
     # Always return success to avoid email enumeration
     user = db.query(User).filter(User.email == request.email).first()
     if not user:
@@ -197,13 +195,14 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     return {"message": "Password reset email sent successfully"}
 
 
-@router.post("/reset-password-link")
-async def reset_password_via_link(
+@router.post("/change-password")
+async def change_password_via_link(
     token: str = Form(...),
     new_password: str = Form(...),
     confirm_password: str = Form(...),
     db: Session = Depends(get_db)
     ) -> Any:
+    """reset the password of user"""
     if new_password != confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
 
@@ -223,8 +222,8 @@ async def reset_password_via_link(
     return {"message": "Password reset successful. Please login again."}
 
 
-@router.post("/auth/change-password", response_model=UserSchema)
-def change_password(
+@router.post("/reset-password", response_model=UserSchema)
+def reset_password(
     request: ChangePasswordRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -241,14 +240,14 @@ def change_password(
     db.refresh(current_user)
     return current_user
 
-@router.get("/me", response_model=UserSchema)
+# @router.get("/me", response_model=UserSchema)
 def read_users_me(current_user: User = Depends(get_current_active_user)) -> Any:
     """
     Get current user.
     """
     return current_user
 
-@router.put("/me", response_model=UserSchema)
+# @router.put("/me", response_model=UserSchema)
 def update_user_me(
     user_in: UserUpdate,
     current_user: User = Depends(get_current_active_user),

@@ -60,6 +60,7 @@ async def save_filtered_list(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_cv_user),
 ):
+    """Thin HTTP layer: delegates to resume_service.save_filtered_list."""
     try:
         return resume_service.save_filtered_list(
             pdf_id=payload.pdf_id,

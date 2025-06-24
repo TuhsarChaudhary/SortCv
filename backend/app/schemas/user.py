@@ -17,12 +17,14 @@ class UserBase(BaseModel):
     
     @validator('phone')
     def validate_phone(cls, v):
+        """Validate phone number."""
         if not re.match(r'^\+?[1-9]\d{1,14}$', v):
             raise ValueError('Phone number must be a valid international format')
         return v
     
     @validator('gender')
     def validate_gender(cls, v):
+        """Validate gender."""
         valid_genders = ['male', 'female', 'other', 'prefer not to say']
         if v.lower() not in valid_genders:
             raise ValueError(f'Gender must be one of: {", ".join(valid_genders)}')
@@ -34,6 +36,7 @@ class UserCreate(UserBase):
     
     @validator('password')
     def validate_password(cls, v):
+        """Validate password strength."""
         if not re.search(r'[A-Z]', v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not re.search(r'[a-z]', v):
@@ -58,12 +61,14 @@ class UserUpdate(BaseModel):
     
     @validator('phone')
     def validate_phone(cls, v):
+        """Validate phone number."""
         if v is not None and not re.match(r'^\+?[1-9]\d{1,14}$', v):
             raise ValueError('Phone number must be a valid international format')
         return v
     
     @validator('gender')
     def validate_gender(cls, v):
+        """Validate gender."""
         if v is not None:
             valid_genders = ['male', 'female', 'other', 'prefer not to say']
             if v.lower() not in valid_genders:
@@ -109,6 +114,7 @@ class ChangePasswordRequest(BaseModel):
 
     @validator('new_password')
     def validate_password_strength(cls, v):
+        """Validate password strength."""
         if not re.search(r'[A-Z]', v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not re.search(r'[a-z]', v):
@@ -121,6 +127,7 @@ class ChangePasswordRequest(BaseModel):
 
     @validator('confirm_new_password')
     def passwords_match(cls, v, values):
+        """Validate that new passwords match."""
         if 'new_password' in values and v != values['new_password']:
             raise ValueError('New passwords do not match')
         return v

@@ -8,6 +8,7 @@ from app.core.email_utils import send_email  # SendGrid helper
 
 class ErrorNotifierMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        """Notify admins of API failures."""
         try:
             response = await call_next(request)
             return response

@@ -25,6 +25,7 @@ if not logger.handlers:
 
 class LogResponseTimeMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        """Log response times."""
         start_time = time.time()
         response = await call_next(request)
         duration = (time.time() - start_time) * 1000  # ms

@@ -30,7 +30,7 @@ async def shortlist_candidates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_cv_user),
 ):
-
+    """Thin HTTP layer: delegates to shortlist_service.shortlist."""
     # Parse skills list from form
     if isinstance(skills, str):
         skills_parsed = [s.strip() for s in skills.strip("[]").split(",") if s.strip()]

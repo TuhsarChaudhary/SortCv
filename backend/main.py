@@ -32,7 +32,7 @@ app.add_middleware(LogResponseTimeMiddleware)
 app.add_middleware(ErrorNotifierMiddleware)
 
 # Include routers
-app.include_router(auth.router, prefix="/api", tags=["auth"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(resume_parser.router, prefix="/api/resume", tags=["Resume Parsing"])
 app.include_router(shortlist.router, prefix="/api/shortlisting", tags=["Shortlisting"])

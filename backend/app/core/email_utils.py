@@ -11,26 +11,7 @@ except ImportError as e:  # pragma: no cover
 
 
 def send_email(to_email: str, subject: str, body: str, *, html_body: Optional[str] = None) -> None:
-    """Send an email via SendGrid.
-
-    Parameters
-    ----------
-    to_email: str
-        Recipient's email address.
-    subject: str
-        Subject line of the email.
-    body: str
-        Plain‐text email body.
-    html_body: Optional[str]
-        Optional HTML content for the email; if omitted, the plain‐text body is reused.
-
-    Raises
-    ------
-    RuntimeError
-        If the SENDGRID_API_KEY environment variable is not set.
-    Exception
-        If the SendGrid API client raises an exception while sending the email (printed to stdout as fallback).
-    """
+    """Send an email via SendGrid."""
     # Ensure a valid CA bundle is used for TLS verification (works for urllib3 / requests)
     ca_bundle_path = certifi.where()
     os.environ.setdefault("SSL_CERT_FILE", ca_bundle_path)
@@ -49,13 +30,6 @@ def send_email(to_email: str, subject: str, body: str, *, html_body: Optional[st
         plain_text_content=body,
         html_content=html_body or body,
     )
-
-    # try:
-    #     sg = SendGridAPIClient(api_key)
-    #     response = sg.send(message)
-    #     # Optionally inspect response.status_code 
-    # except Exception as exc:
-    #     raise RuntimeError(f"SendGrid send failed: {exc}")
 
     try:
         sg = SendGridAPIClient(api_key)
