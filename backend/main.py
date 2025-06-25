@@ -6,6 +6,8 @@ from fastapi.security import OAuth2PasswordBearer
 from app.api.endpoints import auth, users, resume_parser, shortlist
 from app.db.database import Base, engine
 from app.scripts.create_admin import create_admin
+import asyncio
+from app.scripts.otp_cleanup import cleanup_loop
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -24,6 +26,8 @@ app = FastAPI(
 def startup_admin_check():
     if os.getenv("ENSURE_ADMIN_ON_STARTUP", "false").lower() == "true":
         create_admin()
+    # Launch background OTP cleanup task
+    asyncio.create_task(cleanup_loop())
 
 # Configure CORS
 # CORS first

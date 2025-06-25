@@ -33,6 +33,9 @@ class OTPVerifyRequest(BaseModel):
     user_id: int
     otp: str
 
+class ResendOTPRequest(BaseModel):
+    user_id: int
+
 class PasswordResetLinkRequest(BaseModel):
     token: str
     new_password: str
@@ -138,6 +141,39 @@ def login(user_login: UserLogin, db: Session = Depends(get_db)) -> Any:
 
     return {"message": "OTP sent successfully", "user_id": user.id}
 
+@router.post("/login-resend-otp")
+def resend_login_otp(payload: ResendOTPRequest, db: Session = Depends(get_db)) -> Any:
+    """Resend the 6-digit login OTP to the user’s e-mail. Invalidates previous unused OTPs."""
+    user = db.query(User).filter(User.id == payload.user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    # Invalidate any previous unused OTPs
+    db.query(PasswordResetOTP).filter(
+        PasswordResetOTP.user_id == user.id,
+        PasswordResetOTP.used == False
+    ).update({PasswordResetOTP.used: True}, synchronize_session=False)
+    db.commit()
+
+    # Generate new OTP
+    otp = f"{random.randint(0, 999999):06d}"
+    otp_hash = get_password_hash(otp)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+
+    otp_entry = PasswordResetOTP(user_id=user.id, otp_hash=otp_hash, expires_at=expires_at)
+    db.add(otp_entry)
+    db.commit()
+
+    # Send E-mail
+    try:
+        send_email(user.email, "Login OTP for SortCV", f"Your new OTP is {otp}. It expires in 5 minutes.")
+    except RuntimeError as exc:
+        db.delete(otp_entry)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    return {"message": "OTP resent successfully"}
+
 @router.post("/login-verify")
 def login_verify(payload: OTPVerifyRequest, db: Session = Depends(get_db)) -> Any: 
     """Verify OTP for login"""
@@ -191,7 +227,14 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         expires_delta=timedelta(minutes=5)
     )
 
-    reset_url = f"https://CV-RANKING.com/change-password?token={token}"
+    # Persist hashed token so that it can only be used once
+    otp_hash = get_password_hash(token)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+    reset_entry = PasswordResetOTP(user_id=user.id, otp_hash=otp_hash, expires_at=expires_at)
+    db.add(reset_entry)
+    db.commit()
+
+    reset_url = f"http://localhost:4200/reset-password?token={token}"
 
     try:
         send_email(
@@ -220,8 +263,25 @@ async def change_password_via_link(payload: PasswordResetLinkRequest, db: Sessio
     user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+  
+    # Validate that the link has not been used before
+    reset_entry = (
+        db.query(PasswordResetOTP)
+        .filter(
+            PasswordResetOTP.user_id == user.id,
+            PasswordResetOTP.used == False,
+            PasswordResetOTP.expires_at > datetime.now(timezone.utc),
+        )
+        .order_by(PasswordResetOTP.expires_at.desc())
+        .first()
+    )
 
+    if not reset_entry or not verify_password(payload.token, reset_entry.otp_hash):
+        raise HTTPException(status_code=401, detail="Invalid, expired, or already-used link")
+
+    # Mark token as used and reset password
     user.hashed_password = get_password_hash(payload.new_password)
+    reset_entry.used = True
     db.commit()
 
     return {"message": "Password reset successful. Please login again."}
@@ -245,11 +305,9 @@ def reset_password(
     db.refresh(current_user)
     return current_user
 
-# @router.get("/me", response_model=UserSchema)
+@router.get("/me", response_model=UserSchema)
 def read_users_me(current_user: User = Depends(get_current_active_user)) -> Any:
-    """
-    Get current user.
-    """
+    """Get current user."""
     return current_user
 
 # @router.put("/me", response_model=UserSchema)
@@ -258,9 +316,7 @@ def update_user_me(
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ) -> Any:
-    """
-    Update current user.
-    """
+    """Update current user."""
     # Check if email is being updated and if it already exists
     if user_in.email and user_in.email != current_user.email:
         user = db.query(User).filter(User.email == user_in.email).first()
