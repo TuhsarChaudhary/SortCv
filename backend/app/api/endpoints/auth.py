@@ -71,8 +71,8 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)) -> Any:
         nationality=user_in.nationality,
         hashed_password=get_password_hash(user_in.password),
         is_active=True,
-        is_admin=False
-        # cv_access = False
+        is_admin=False,
+        cv_access = False
     )
     
     db.add(db_user)

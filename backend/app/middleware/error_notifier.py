@@ -6,6 +6,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 from app.core.email_utils import send_email  # SendGrid helper
 
+from dotenv import load_dotenv
+load_dotenv()
+
 class ErrorNotifierMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """Notify admins of API failures."""
@@ -20,7 +23,7 @@ class ErrorNotifierMiddleware(BaseHTTPMiddleware):
             # You could also filter paths (e.g., skip Swagger/docs)
             try:
                 send_email(
-                    to_email="tusharchaudhary002350@outlook.com",  # ops email
+                    to_email=os.getenv("FROM_EMAIL"),  # ops email
                     subject=f"[ALERT] API failure at {path}",
                     body=f"Exception:\n{str(e)}\n\nTraceback:\n{error_details}",
                 )

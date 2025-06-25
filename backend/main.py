@@ -1,9 +1,11 @@
+import os
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
 
 from app.api.endpoints import auth, users, resume_parser, shortlist
 from app.db.database import Base, engine
+from app.scripts.create_admin import create_admin
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -17,6 +19,11 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="CvSorter"
 )
+
+@app.on_event("startup")
+def startup_admin_check():
+    if os.getenv("ENSURE_ADMIN_ON_STARTUP", "false").lower() == "true":
+        create_admin()
 
 # Configure CORS
 # CORS first

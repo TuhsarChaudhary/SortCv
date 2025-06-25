@@ -1,15 +1,11 @@
-"""High-level resume related operations.
-Until real parsing & scoring modules arrive, we keep the previous logic here so existing
-endpoints behave exactly the same. When the real modules are ready, they can replace
-`parse_pdf_to_df` and `perform_shortlisting` below without touching the routers.
-"""
+"""High-level resume related operations."""
 
 from __future__ import annotations
 
 import hashlib
 import os
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -29,28 +25,7 @@ else:
 # Ensure the directory exists
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# Placeholder PDF → DataFrame parser (keep behaviour unchanged)
-# ---------------------------------------------------------------------------
-
-# def parse_pdf_to_df(file_path: str | Path) -> pd.DataFrame:
-#     """TEMP stub – returns a mocked DataFrame.
-#     Replace with real parser when available.
-#     """
-#     data = {
-#         "CV ID": ["CV 2", "CV 5", "CV 7"],
-#         "Name": ["Sushil Kumar", "Piyush Singh", "Vivek Mathur"],
-#         "Highest Degree": ["Bachelors Degree", "Masters Degree", "Masters Degree"],
-#         "YOE": [12, 4, 4],
-#         "Gender": ["Male", "Male", "Male"],
-#         "Nationality": ["India", "India", "India"],
-#     }
-#     return pd.DataFrame(data)
-
-# ---------------------------------------------------------------------------
-# Public service functions used by routers
-# ---------------------------------------------------------------------------
-
+# Public functions 
 def upload_resume(
     *,
     file_bytes: bytes,
@@ -58,9 +33,7 @@ def upload_resume(
     db: Session,
     uploaded_by: Optional[int] = None,
 ) -> Dict:
-    """Handle resume upload, parsing & DB persistence.
-    Returns a JSON-serialisable dict identical to the old endpoint output.
-    """
+    """Handle resume upload, parsing & DB persistence. Returns a JSON-serialisable dict identical to the old endpoint output."""
     pdf_hash = hashlib.sha256(file_bytes).hexdigest()
 
     # 1) Dedup by hash
@@ -78,7 +51,6 @@ def upload_resume(
     pdf_path.write_bytes(file_bytes)
 
     # 3) Parse
-    # df = parse_pdf_to_df(pdf_path)
     df = extract_all(pdf_path)
 
     # 4) Save CSV

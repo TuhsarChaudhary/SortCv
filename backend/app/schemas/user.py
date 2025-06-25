@@ -25,7 +25,7 @@ class UserBase(BaseModel):
     @validator('gender')
     def validate_gender(cls, v):
         """Validate gender."""
-        valid_genders = ['male', 'female', 'other', 'prefer not to say']
+        valid_genders = ['male', 'female', 'other']
         if v.lower() not in valid_genders:
             raise ValueError(f'Gender must be one of: {", ".join(valid_genders)}')
         return v.lower()
@@ -70,7 +70,7 @@ class UserUpdate(BaseModel):
     def validate_gender(cls, v):
         """Validate gender."""
         if v is not None:
-            valid_genders = ['male', 'female', 'other', 'prefer not to say']
+            valid_genders = ['male', 'female', 'other']
             if v.lower() not in valid_genders:
                 raise ValueError(f'Gender must be one of: {", ".join(valid_genders)}')
             return v.lower()
