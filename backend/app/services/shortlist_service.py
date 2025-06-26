@@ -1,7 +1,4 @@
-"""Business logic for shortlisting candidates against a JD.
-Currently mirrors the existing endpoint implementation so behaviour remains unchanged.
-Replace `perform_shortlisting` with real ML/semantic matching later.
-"""
+"""Business logic for shortlisting candidates against a JD."""
 
 from __future__ import annotations
 
@@ -15,25 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.models.resume_pdf import ResumePDF
 from app.repositories import resume_repo
+from slmod import (
+    extract_job_description,
+    extract_relevant_job_sections,
+    rank_cvs,
+)
 
 MEDIA_FOLDER = Path("app/static/media_files")
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
-
-# ---------------------------------------------------------------------------
-# Placeholder algorithm
-# ---------------------------------------------------------------------------
-
-def perform_shortlisting(filtered_df: pd.DataFrame, jd_file_path: str, filters: Dict) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """TEMP stub – returns a mocked JD DF plus filtered_df with fake scores."""
-    jd_df = pd.DataFrame({
-        "Job Title": ["AI Engineer"],
-        "Skills Extracted": [filters.get("skills", [])],
-        "Experience Required": [filters.get("experience", 3)],
-    })
-    shortlisted_df = filtered_df.copy()
-    shortlisted_df["Score"] = [0.88, 0.85, 0.75][: len(filtered_df)]
-    shortlisted_df = shortlisted_df.sort_values(by="Score", ascending=False)
-    return jd_df, shortlisted_df
 
 # ---------------------------------------------------------------------------
 # Public service function
@@ -44,7 +30,12 @@ def shortlist(
     pdf_id: int,
     jd_file_bytes: bytes,
     jd_filename: str,
-    filters: Dict,
+    jd_template: str,
+    search_query: str,
+    search_operator: str,
+    weight_experience: float,
+    weight_qualifications: float,
+    weight_skills: float,
     db: Session,
 ) -> Dict:
     resume = resume_repo.get_by_id(db, pdf_id)
@@ -57,17 +48,55 @@ def shortlist(
 
     filtered_df = pd.read_csv(csv_source)
 
+    # ------------------------------------------------------------------
+    # Optional search query filtering BEFORE ranking
+    # ------------------------------------------------------------------
+    if search_query:
+        terms = [t.strip().lower() for t in search_query.split(",") if t.strip()]
+        if terms:
+            def matches(text: str) -> bool:
+                text_l = str(text).lower()
+                if search_operator == "AND":
+                    return all(term in text_l for term in terms)
+                # Default OR behaviour
+                return any(term in text_l for term in terms)
+
+            # Assume Employment History column exists at index 6 or with name 'Employment History'
+            if "Employment History" in filtered_df.columns:
+                mask = filtered_df["Employment History"].apply(matches)
+            else:
+                # Fallback: apply to the string representation of the row
+                mask = filtered_df.apply(lambda row: matches(" ".join(map(str, row.values))), axis=1)
+            filtered_df = filtered_df[mask].reset_index(drop=True)
+
     # Persist JD PDF
     jd_path = MEDIA_FOLDER / jd_filename
     with open(jd_path, "wb") as f:
         f.write(jd_file_bytes)
 
-    # Run algorithm
-    jd_df, shortlisted_df = perform_shortlisting(filtered_df, str(jd_path), filters)
+    # ------------------------------------------------------------------
+    # JD processing pipeline
+    # ------------------------------------------------------------------
+    # 1. Extract full JD text
+    full_jd_text = extract_job_description(str(jd_path))
+
+    # 2. Extract relevant sections based on template
+    relevant_section_text = extract_relevant_job_sections(full_jd_text, jd_template)
+
+    # 3. Rank CVs (using default required experience/degree for now)
+    ranked_df = rank_cvs(
+        relevant_section_text or full_jd_text,
+        required_experience=0,
+        required_degree="Any",
+        df=filtered_df,
+        weight_experience=weight_experience,
+        weight_qualifications=weight_qualifications,
+        weight_skills=weight_skills,
+    )
 
     # Save shortlist CSV
     shortlist_path = MEDIA_FOLDER / f"{Path(resume.pdf_name).stem}_shortlist.csv"
-    shortlisted_df.to_csv(shortlist_path, index=False)
+    ranked_df.to_csv(shortlist_path, index=False)
 
     # Update DB
     resume.job_desc_path = str(jd_path)
@@ -75,7 +104,6 @@ def shortlist(
     resume_repo.update(db, resume)
 
     return {
-        "message": "Shortlisting successful",
-        "jd_data": jd_df.to_dict(orient="records"),
-        "shortlisted": shortlisted_df.to_dict(orient="records"),
+        "relevant_section_text": relevant_section_text,
+        "shortlisted": ranked_df.to_dict(orient="records"),
     }

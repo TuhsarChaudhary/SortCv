@@ -25,26 +25,28 @@ os.makedirs(MEDIA_FOLDER, exist_ok=True)
 async def shortlist_candidates(
     pdf_id: int = Form(...),
     jd_file: UploadFile = File(...),
-    skills: Union[List[str], str] = Form(...),
-    experience: Optional[int] = Form(0),
+    jd_template: str = Form(...),
+    search_query: str = Form(""),
+    search_operator: str = Form("OR"),
+    weight_experience: float = Form(0.3),
+    weight_qualifications: float = Form(0.3),
+    weight_skills: float = Form(0.4),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_cv_user),
 ):
     """Thin HTTP layer: delegates to shortlist_service.shortlist."""
-    # Parse skills list from form
-    if isinstance(skills, str):
-        skills_parsed = [s.strip() for s in skills.strip("[]").split(",") if s.strip()]
-    else:
-        skills_parsed = skills
-
-    filters = {"skills": skills_parsed, "experience": experience}
-
     try:
+        # Delegate heavy lifting to service layer
         return shortlist_service.shortlist(
             pdf_id=pdf_id,
             jd_file_bytes=await jd_file.read(),
             jd_filename=jd_file.filename,
-            filters=filters,
+            jd_template=jd_template,
+            search_query=search_query,
+            search_operator=search_operator.upper(),
+            weight_experience=weight_experience,
+            weight_qualifications=weight_qualifications,
+            weight_skills=weight_skills,
             db=db,
         )
     except ValueError as e:

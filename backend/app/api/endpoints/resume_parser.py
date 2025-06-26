@@ -20,19 +20,6 @@ router = APIRouter()
 MEDIA_FOLDER = os.path.join("app", "static", "media_files")
 os.makedirs(MEDIA_FOLDER, exist_ok=True)
 
-# Placeholder function for now
-def parse_pdf_to_df(file_path: str) -> pd.DataFrame:
-    # Simulate longlist from a parsed PDF
-    data = {
-        'CV ID': ['CV 2', 'CV 5', 'CV 7'],
-        'Name': ['Sushil Kumar', 'Piyush Singh', 'Vivek Mathur'],
-        'Highest Degree': ['Bachelors Degree', 'Masters Degree', 'Masters Degree'],
-        'YOE': [12, 4, 4],
-        'Gender': ['Male', 'Male', 'Male'],
-        'Nationality': ['India', 'India', 'India']
-    }
-    return pd.DataFrame(data)
-
 @router.post("/upload-resume")
 async def upload_resume(
     cv_file: UploadFile = File(...),
