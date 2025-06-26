@@ -103,7 +103,7 @@ def shortlist(
     resume.short_listing_csv = str(shortlist_path)
     resume_repo.update(db, resume)
 
-    return {
+    return {  
         "relevant_section_text": relevant_section_text,
         "shortlisted": ranked_df.to_dict(orient="records"),
     }

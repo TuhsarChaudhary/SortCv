@@ -151,45 +151,67 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
     job_embedding = sbert_model.encode(preprocess_text(job_description), convert_to_tensor=True)
     rankings = []
 
-    for peep in df.itertuples():
+    # Iterate over rows by column name instead of relying on tuple positions
+    for idx, row in df.reset_index(drop=True).iterrows():
+        
+        # ------------------------------------------------------------------
+        # Robust field extraction with sensible fall-backs
+        # ------------------------------------------------------------------
+        employment_history = (
+            row.get("Employment History")
+            or row.get("Employment_History")
+            or ""
+        )
+        
+        highest_degree = (
+            row.get("Highest Degree")
+            or row.get("Highest_Degree")
+            or ""
+        )
+        
+        yoe = row.get("YOE", 0)
+        
+        applicant_name = (
+            row.get("Name")
+            or row.get("Applicant Name")
+            or row.get("Applicant_Name")
+            or f"CV {idx + 1}"
+        )
+        
+        gender = row.get("Gender", "")
+        nationality = row.get("Nationality", "")
 
-        processed_cv = preprocess_text(peep._7)
+        # ------------------------------------------------------------------
+        # Embedding & scoring
+        # ------------------------------------------------------------------
+        processed_cv = preprocess_text(str(employment_history))
         cv_embedding = sbert_model.encode(processed_cv, convert_to_tensor=True)
         similarity_score = util.cos_sim(job_embedding, cv_embedding).item()
-
+        
         # Scale experience and education
-        scaled_experience = scale_experience(peep.YOE, required_experience)
-        scaled_education = scale_education(peep._3, required_degree)
-
-        # Debugging output for scaled education
-        #print(f"Scaled Education for {applicant_name}: {scaled_education}")
-
-        # print(
-        #     weight_experience , scaled_experience ,
-        #     weight_qualifications , scaled_education ,
-        #     weight_skills , similarity_score
-        # )
-
+        scaled_experience = scale_experience(yoe, required_experience)
+        scaled_education = scale_education(highest_degree, required_degree)
+        
         # Final score calculation
         final_score = (
-            weight_experience * scaled_experience +
-            weight_qualifications * scaled_education +
-            weight_skills * similarity_score
+            weight_experience * scaled_experience
+            + weight_qualifications * scaled_education
+            + weight_skills * similarity_score
         )
-
-        # Clamp the final score to be between 0 and 1
-        final_score = max(0.0, min(final_score, 1.0))
-
-        rankings.append((
-            f"CV {peep.Index + 1}",
-            peep.Name,
-            peep._3,  # Degree
-            peep.YOE,  # Years of Experience
-            final_score,
-            peep._7,
-            peep.Gender,
-            peep.Nationality
-        ))
+        final_score = max(0.0, min(final_score, 1.0))  # clamp 0-1
+        
+        rankings.append(
+            (
+                f"CV {idx + 1}",
+                applicant_name,
+                highest_degree,
+                yoe,
+                final_score,
+                employment_history,
+                gender,
+                nationality,
+            )
+        )
 
     sort_rank = sorted(rankings, key=lambda x: x[4], reverse=True)    
 
@@ -213,4 +235,3 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
 # print(two)
 
 # print()
-
