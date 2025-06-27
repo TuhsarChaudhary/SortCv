@@ -36,17 +36,38 @@ def upload_resume(
     """Handle resume upload, parsing & DB persistence. Returns a JSON-serialisable dict identical to the old endpoint output."""
     pdf_hash = hashlib.sha256(file_bytes).hexdigest()
 
-    # 1) Dedup by hash
-    if existing := resume_repo.get_by_hash(db, pdf_hash):
-        df = pd.read_csv(existing.csv_path)
+    # 1) Dedup logic
+    # a) Does the same user already have this file? – return cached
+    if existing_same_user := resume_repo.get_by_hash_and_user(db, pdf_hash, uploaded_by or -1):
+        df = pd.read_csv(existing_same_user.csv_path)
         return {
             "message": "Resume already processed – returning cached result",
-            "pdf_id": existing.id,
+            "pdf_id": existing_same_user.id,
             "rows": len(df),
             "data": df.to_dict(orient="records"),
         }
 
-    # 2) Save file to disk
+    # b) File exists from another user – reuse artefacts but create new DB row
+    existing_any = resume_repo.get_first_by_hash(db, pdf_hash)
+    if existing_any:
+        df = pd.read_csv(existing_any.csv_path)
+        new_row = ResumePDF(
+            pdf_name=existing_any.pdf_name,
+            pdf_hash=pdf_hash,
+            pdf_path=existing_any.pdf_path,
+            csv_path=existing_any.csv_path,
+            size=existing_any.size,
+            uploaded_by=uploaded_by,
+        )
+        saved = resume_repo.add(db, new_row)
+        return {
+            "message": "Resume already processed by another user – linked to existing parse",
+            "pdf_id": saved.id,
+            "rows": len(df),
+            "data": df.to_dict(orient="records"),
+        }
+
+    # 2) Save file to disk (first time this file is ever seen)
     pdf_path = MEDIA_FOLDER / filename
     pdf_path.write_bytes(file_bytes)
 
@@ -80,6 +101,8 @@ def save_filtered_list(
     *,
     pdf_id: int,
     data: List[Dict],
+    min_experience: int | None,
+    min_degree: str | None,
     db: Session,
 ) -> Dict:
     """Persist the filtered long-list and update DB row."""
@@ -88,13 +111,16 @@ def save_filtered_list(
         raise ValueError("Resume record not found")
 
     df = pd.DataFrame(data)
+    # Make filename unique per ResumePDF row so users don't overwrite each other's filtered list
     save_path = (
         MEDIA_FOLDER
-        / f"{Path(resume.pdf_name).stem}_longlist_filtered.csv"
+        / f"{Path(resume.pdf_name).stem}_{resume.id}_longlist_filtered.csv"
     )
     df.to_csv(save_path, index=False)
 
     resume.long_listing_csv = str(save_path)
+    resume.min_experience = min_experience
+    resume.min_degree = min_degree
     resume_repo.update(db, resume)
 
     return {"message": "Filtered list saved successfully", "path": str(save_path)}

@@ -24,10 +24,12 @@ os.makedirs(MEDIA_FOLDER, exist_ok=True)
 @router.post("/shortlist")
 async def shortlist_candidates(
     pdf_id: int = Form(...),
+    # required_experience: int = Form(...),
+    # required_degree: str = Form(...),
     jd_file: UploadFile = File(...),
     jd_template: str = Form(...),
-    search_query: str = Form(""),
-    search_operator: str = Form("OR"),
+    # search_query: str = Form(""),
+    # search_operator: str = Form("OR"),
     weight_experience: float = Form(0.3),
     weight_qualifications: float = Form(0.3),
     weight_skills: float = Form(0.4),
@@ -39,11 +41,13 @@ async def shortlist_candidates(
         # Delegate heavy lifting to service layer
         return shortlist_service.shortlist(
             pdf_id=pdf_id,
+            # required_experience=required_experience,
+            # required_degree=required_degree,
             jd_file_bytes=await jd_file.read(),
             jd_filename=jd_file.filename,
             jd_template=jd_template,
-            search_query=search_query,
-            search_operator=search_operator.upper(),
+            # search_query=search_query,
+            # search_operator=search_operator.upper(),
             weight_experience=weight_experience,
             weight_qualifications=weight_qualifications,
             weight_skills=weight_skills,

@@ -38,6 +38,8 @@ async def upload_resume(
 # Model for receiving filtered list along with the DB id of the parent PDF
 class FilteredResumeList(BaseModel):
     pdf_id: int
+    min_experience: int | None = None
+    min_degree: str | None = None
     data: list[dict]
 
 
@@ -52,6 +54,8 @@ async def save_filtered_list(
         return resume_service.save_filtered_list(
             pdf_id=payload.pdf_id,
             data=payload.data,
+            min_experience=payload.min_experience,
+            min_degree=payload.min_degree,
             db=db,
         )
     except ValueError as e:
