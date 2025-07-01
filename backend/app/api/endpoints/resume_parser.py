@@ -23,15 +23,14 @@ os.makedirs(MEDIA_FOLDER, exist_ok=True)
 @router.post("/upload-resume")
 async def upload_resume(
     cv_file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    # db: Session = Depends(get_db),
     current_user: User = Depends(get_current_cv_user),
 ):
     """Thin HTTP layer: delegates to resume_service.upload_resume."""
     file_bytes = await cv_file.read()
-    return resume_service.upload_resume(
+    return await resume_service.upload_resume(
         file_bytes=file_bytes,
         filename=cv_file.filename,
-        db=db,
         uploaded_by=current_user.id,
     )
 

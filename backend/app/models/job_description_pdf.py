@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -18,14 +18,14 @@ class JobDescriptionPDF(Base):
     jd_path: str = Column(String, nullable=False)
 
     # Template used to extract relevant sections (e.g. "UNV Template")
-    template_type: str = Column(String, nullable=False)
+    template_type: str = Column(String, nullable=False, index=True)
 
     # Artefacts
-    shortlist_csv: str | None = Column(String, nullable=True)
+    # shortlist_csv: str | None = Column(String, nullable=True)
     relevant_text_path: str | None = Column(String, nullable=True)
 
     # Relationship back to the originating resume
-    resume_id: int = Column(Integer, ForeignKey("resume_pdfs.id"), nullable=False)
+    resume_id: int = Column(Integer, ForeignKey("resume_pdfs.id"), nullable=False, index=True)
     resume = relationship(
         "ResumePDF",
         back_populates="job_descriptions",
@@ -35,3 +35,14 @@ class JobDescriptionPDF(Base):
     # Timestamps
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    # Composite index to speed lookups by the triple we query most often
+    __table_args__ = (
+        Index(
+            "uq_jd_resume_hash_template",
+            "resume_id",
+            "jd_hash",
+            "template_type",
+            unique=True,
+        ),
+    )

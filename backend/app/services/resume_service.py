@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Optional, Dict, List
 
 import pandas as pd
+import asyncio
+from app.db.database import SessionLocal
 from sqlalchemy.orm import Session
 
 from app.models.resume_pdf import ResumePDF
@@ -26,30 +28,43 @@ else:
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # Public functions 
-def upload_resume(
+def upload_resume_sync(
     *,
     file_bytes: bytes,
     filename: str,
-    db: Session,
+    db: Session | None = None,
     uploaded_by: Optional[int] = None,
 ) -> Dict:
     """Handle resume upload, parsing & DB persistence. Returns a JSON-serialisable dict identical to the old endpoint output."""
+    _local_session = False
+    if db is None:
+        db = SessionLocal()
+        _local_session = True
+
     pdf_hash = hashlib.sha256(file_bytes).hexdigest()
 
     # 1) Dedup logic
     # a) Does the same user already have this file? – return cached
-    if existing_same_user := resume_repo.get_by_hash_and_user(db, pdf_hash, uploaded_by or -1):
+    existing_same_user = resume_repo.get_by_hash_and_user(db, pdf_hash, uploaded_by or -1)
+    if existing_same_user and _artefacts_exist(existing_same_user):
         df = pd.read_csv(existing_same_user.csv_path)
-        return {
+        result = {
             "message": "Resume already processed – returning cached result",
             "pdf_id": existing_same_user.id,
             "rows": len(df),
             "data": df.to_dict(orient="records"),
         }
+        if _local_session:
+            db.close()
+        return result
+    elif existing_same_user and not _artefacts_exist(existing_same_user):
+        # Stale DB row – clean it up so we can re-parse cleanly
+        db.delete(existing_same_user)
+        db.commit()
 
     # b) File exists from another user – reuse artefacts but create new DB row
     existing_any = resume_repo.get_first_by_hash(db, pdf_hash)
-    if existing_any:
+    if existing_any and _artefacts_exist(existing_any):
         df = pd.read_csv(existing_any.csv_path)
         new_row = ResumePDF(
             pdf_name=existing_any.pdf_name,
@@ -60,15 +75,22 @@ def upload_resume(
             uploaded_by=uploaded_by,
         )
         saved = resume_repo.add(db, new_row)
-        return {
+        result = {
             "message": "Resume already processed by another user – linked to existing parse",
             "pdf_id": saved.id,
             "rows": len(df),
             "data": df.to_dict(orient="records"),
         }
+        if _local_session:
+            db.close()
+        return result
+    elif existing_any and not _artefacts_exist(existing_any):
+        # Artefacts missing – ignore this optimisation path and fall through to fresh parse
+        pass
 
     # 2) Save file to disk (first time this file is ever seen)
-    pdf_path = MEDIA_FOLDER / filename
+    safe_filename = os.path.basename(filename)
+    pdf_path = MEDIA_FOLDER / safe_filename
     pdf_path.write_bytes(file_bytes)
 
     # 3) Parse
@@ -80,7 +102,7 @@ def upload_resume(
 
     # 5) Persist DB row
     row = ResumePDF(
-        pdf_name=filename,
+        pdf_name=safe_filename,
         pdf_hash=pdf_hash,
         pdf_path=str(pdf_path),
         csv_path=str(csv_path),
@@ -89,12 +111,31 @@ def upload_resume(
     )
     saved = resume_repo.add(db, row)
 
-    return {
+    result = {
         "message": "Resume parsed successfully",
         "pdf_id": saved.id,
         "rows": len(df),
         "data": df.to_dict(orient="records"),
     }
+    if _local_session:
+        db.close()
+    return result
+
+
+async def upload_resume(
+    *,
+    file_bytes: bytes,
+    filename: str,
+    uploaded_by: Optional[int] = None,
+) -> Dict:
+    """Async wrapper to offload blocking parsing to a thread."""
+    return await asyncio.to_thread(
+        upload_resume_sync,
+        file_bytes=file_bytes,
+        filename=filename,
+        db=None,  # Let the sync fn create a thread-local session
+        uploaded_by=uploaded_by,
+    )
 
 
 def save_filtered_list(
@@ -124,3 +165,12 @@ def save_filtered_list(
     resume_repo.update(db, resume)
 
     return {"message": "Filtered list saved successfully", "path": str(save_path)}
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _artefacts_exist(row: ResumePDF) -> bool:  # pragma: no cover – trivial helper
+    """Return True only if all stored artefact paths actually exist on disk."""
+    return row and os.path.isfile(row.csv_path) and os.path.isfile(row.pdf_path)

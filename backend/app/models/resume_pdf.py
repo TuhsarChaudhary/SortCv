@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -27,8 +27,8 @@ class ResumePDF(Base):
 
     # Optional artefacts – may be null initially
     long_listing_csv = Column(String, nullable=True)
-    short_listing_csv = Column(String, nullable=True)
-    job_desc_path = Column(String, nullable=True)
+    # short_listing_csv = Column(String, nullable=True)
+    # job_desc_path = Column(String, nullable=True)
 
     # Misc
     size: int | None = Column(Integer, nullable=True)
@@ -36,7 +36,7 @@ class ResumePDF(Base):
     # Filter thresholds used to produce the stored long_listing_csv
     min_experience: int | None = Column(Integer, nullable=True)
     min_degree: str | None = Column(String, nullable=True)
-    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Link to the most recently used JD (optional convenience foreign key)
     jd_id = Column(Integer, ForeignKey("jd_pdfs.id"), nullable=True)

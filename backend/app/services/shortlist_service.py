@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 import pandas as pd
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.resume_pdf import ResumePDF
@@ -20,14 +21,27 @@ from slmod import (
     rank_cvs,
 )
 
+import asyncio
+from app.db.database import SessionLocal
+
 MEDIA_FOLDER = Path("app/static/media_files")
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------
-# Public service function
+# Running heavy work without blocking the event-loop
+# ---------------------------------------------------------------------------
+# We keep the original (blocking) implementation as `shortlist_sync` and expose an
+# async wrapper that executes it in a background thread via `asyncio.to_thread`.
+#
+#   • Incoming HTTP handler awaits the async wrapper – this releases control
+#     back to the event-loop while the real work runs in the thread-pool.
+#   • No extra infrastructure is required (zero-dep option A).
+
+# ---------------------------------------------------------------------------
+# Blocking implementation (moved from original `shortlist`)
 # ---------------------------------------------------------------------------
 
-def shortlist(
+def shortlist_sync(
     *,
     pdf_id: int,
     jd_file_bytes: bytes,
@@ -36,8 +50,12 @@ def shortlist(
     weight_experience: float,
     weight_qualifications: float,
     weight_skills: float,
-    db: Session,
+    db: Session | None = None,
 ) -> Dict:
+    _local_session = False
+    if db is None:
+        db = SessionLocal()
+        _local_session = True
     resume = resume_repo.get_by_id(db, pdf_id)
     if resume is None or (resume.long_listing_csv is None and resume.csv_path is None):
         raise ValueError("Filtered list not found for given resume")
@@ -51,6 +69,8 @@ def shortlist(
     # --------------------------------------------------------------
     # Compute JD hash & dedup row lookup **before** saving the file
     # --------------------------------------------------------------
+    # Prevent directory traversal in user-provided filenames
+    jd_filename = os.path.basename(jd_filename)
     jd_hash = hashlib.sha256(jd_file_bytes).hexdigest()
     existing_jd = jd_repo.get_by_hash_resume_template(db, jd_hash, resume.id, jd_template)
 
@@ -102,6 +122,7 @@ def shortlist(
         if 'rel_txt_path' in locals():
             existing_jd.relevant_text_path = str(rel_txt_path)
         jd_repo.update(db, existing_jd)
+        jd_ref = existing_jd  # Reference to link back to ResumePDF
     else:
         jd_row = JobDescriptionPDF(
             jd_name=jd_filename,
@@ -111,9 +132,58 @@ def shortlist(
             relevant_text_path=str(rel_txt_path),
             resume_id=resume.id,
         )
-        jd_repo.add(db, jd_row)
+        try:
+            jd_repo.add(db, jd_row)
+        except IntegrityError:
+            # Row was inserted concurrently by another request – fetch it instead
+            db.rollback()
+            jd_row = jd_repo.get_by_hash_resume_template(db, jd_hash, resume.id, jd_template)
+        jd_ref = jd_row  # Reference to link back to ResumePDF
 
-    return {
+    # ------------------------------------------------------------------
+    # Update convenience foreign key on ResumePDF to point to latest JD
+    # ------------------------------------------------------------------
+    resume.jd_id = jd_ref.id
+    resume_repo.update(db, resume)
+
+    result = {
         "relevant_section_text": relevant_section_text,
         "shortlisted": ranked_df.to_dict(orient="records"),
     }
+    if _local_session:
+        db.close()
+    return result
+    
+
+# ---------------------------------------------------------------------------
+# Async wrapper – Non-blocking public API
+# ---------------------------------------------------------------------------
+
+async def shortlist(
+    *,
+    pdf_id: int,
+    jd_file_bytes: bytes,
+    jd_filename: str,
+    jd_template: str,
+    weight_experience: float,
+    weight_qualifications: float,
+    weight_skills: float,
+    db: Session | None = None,
+) -> Dict:
+    """Run :pyfunc:`shortlist_sync` in a thread so the event-loop stays free.
+
+    The signature mirrors ``shortlist_sync`` so callers (e.g. API layer) remain
+    unchanged.  All heavy CPU + blocking I/O work happens in a worker thread
+    from the default asyncio thread-pool.
+    """
+
+    return await asyncio.to_thread(
+        shortlist_sync,
+        pdf_id=pdf_id,
+        jd_file_bytes=jd_file_bytes,
+        jd_filename=jd_filename,
+        jd_template=jd_template,
+        weight_experience=weight_experience,
+        weight_qualifications=weight_qualifications,
+        weight_skills=weight_skills,
+    )

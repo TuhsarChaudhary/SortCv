@@ -39,7 +39,7 @@ async def shortlist_candidates(
     """Thin HTTP layer: delegates to shortlist_service.shortlist."""
     try:
         # Delegate heavy lifting to service layer
-        return shortlist_service.shortlist(
+        return await shortlist_service.shortlist(
             pdf_id=pdf_id,
             # required_experience=required_experience,
             # required_degree=required_degree,
