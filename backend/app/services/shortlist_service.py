@@ -24,7 +24,15 @@ from slmod import (
 import asyncio
 from app.db.database import SessionLocal
 
-MEDIA_FOLDER = Path("app/static/media_files")
+# Configure media folder via environment variable so deployments (e.g. AWS) can override
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # backend directory
+MEDIA_FOLDER_ENV = os.getenv("MEDIA_FOLDER")
+if MEDIA_FOLDER_ENV:
+    MEDIA_FOLDER = Path(MEDIA_FOLDER_ENV)
+else:
+    MEDIA_FOLDER = PROJECT_ROOT / "app" / "static" / "media_files"
+
+# Ensure the directory exists
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # ---------------------------------------------------------------------------

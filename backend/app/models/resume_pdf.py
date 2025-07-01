@@ -6,13 +6,7 @@ from app.db.database import Base
 
 
 class ResumePDF(Base):
-    """ORM model for storing resume-related artefacts.
-
-    At the moment only resume parsing (long-listing) has been implemented so
-    `long_listing_csv` is populated while `short_listing_csv` and
-    `job_desc_path` are left blank.  When the short-listing flow is wired up
-    those fields can be updated easily using the same record.
-    """
+    """ORM model for storing resume-related artefacts."""
 
     __tablename__ = "resume_pdfs"
 
