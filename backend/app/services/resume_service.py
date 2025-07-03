@@ -122,6 +122,21 @@ def upload_resume_sync(
             detail="Please upload a valid resume PDF."
         )
 
+    # Additional sanity check: ensure the first resume has a valid Gender
+    # field ('male', 'female', or 'other'). Any other value (or missing
+    # column) indicates the PDF is not a proper P-11 form.
+    valid_genders = {"male", "female", "other"}
+    first_gender: str | None = None
+    if "Gender" in df.columns and not df["Gender"].isna().all():
+        first_gender = str(df.loc[0, "Gender"]).strip().lower()
+
+    if first_gender is None or first_gender not in valid_genders:
+        pdf_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a valid P-11 resume PDF (invalid or missing gender field)."
+        )
+
     # 4) Save CSV
     csv_path = MEDIA_FOLDER / f"{pdf_path.stem}_longlist.csv"
     df.to_csv(csv_path, index=False)

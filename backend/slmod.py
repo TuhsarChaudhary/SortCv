@@ -6,7 +6,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from keybert import KeyBERT
 
 education_hierarchy = {
-    "PhD": 1.0,
+    "Doctorate": 1.0,
     "Masters Degree": 0.8,
     "Bachelors Degree": 0.6,
     "Diploma": 0.4,
@@ -27,6 +27,9 @@ def load_sbert_model(model_name):
 
 model_name = "all-MiniLM-L12-v2"
 sbert_model = load_sbert_model(model_name)
+
+# Load heavy models once per Python process to avoid repeated loading cost
+kw_model = KeyBERT(model="all-MiniLM-L6-v2")
 
 def clean_text(text):
     # Remove CID artifacts which are common in PDFs
@@ -161,7 +164,8 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
     job_embedding = sbert_model.encode(preprocess_text(job_description), convert_to_tensor=True)
     
     rankings = []
-    kw_model = KeyBERT(model="all-MiniLM-L6-v2")
+    global kw_model
+
     #test
     max_yoe = df['YOE'].max()
 
@@ -204,7 +208,6 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
         similarity_score = util.cos_sim(job_embedding, cv_embedding).item()
 
         mkws = []
-        # kw_model = KeyBERT(model="all-MiniLM-L6-v2")
         kws = kw_model.extract_keywords(job_description, top_n=20, keyphrase_ngram_range=(1, 2), stop_words='english')
     
         for kw, _ in kws:

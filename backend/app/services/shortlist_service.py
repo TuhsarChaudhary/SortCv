@@ -23,6 +23,7 @@ from slmod import (
 
 import asyncio
 from app.db.database import SessionLocal
+from fastapi import HTTPException
 
 # Configure media folder via environment variable so deployments (e.g. AWS) can override
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # backend directory
@@ -82,6 +83,12 @@ def shortlist_sync(
     jd_hash = hashlib.sha256(jd_file_bytes).hexdigest()
     existing_jd = jd_repo.get_by_hash_resume_template(db, jd_hash, resume.id, jd_template)
 
+    # If DB row exists but underlying file is missing -> clean up row & treat as new
+    if existing_jd and not os.path.isfile(existing_jd.jd_path):
+        db.delete(existing_jd)
+        db.commit()
+        existing_jd = None
+
     if existing_jd:
         # Reuse previously stored file path – no need to write again
         jd_path = Path(existing_jd.jd_path)
@@ -108,6 +115,18 @@ def shortlist_sync(
         with open(rel_txt_path, "w", encoding="utf-8") as fh:
             fh.write(relevant_section_text)
         # Update or create JD DB row later with this path
+
+    # Validate JD text – must not be empty
+    if not relevant_section_text or not relevant_section_text.strip():
+        # Delete the newly saved JD path/text file to keep storage clean
+        if 'jd_path' in locals() and jd_path.exists():
+            jd_path.unlink(missing_ok=True)
+        if 'rel_txt_path' in locals() and rel_txt_path.exists():
+            rel_txt_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400,
+            detail="JD file has no extractable text or template mismatch."
+        )
 
     # 3. Rank CVs (using default required experience/degree for now)
     # Optional debug logging
