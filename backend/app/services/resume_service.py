@@ -9,6 +9,7 @@ from typing import Optional, Dict, List
 
 import pandas as pd
 import asyncio
+from fastapi import HTTPException
 from app.db.database import SessionLocal
 from sqlalchemy.orm import Session
 
@@ -59,6 +60,15 @@ def upload_resume_sync(
         return result
     elif existing_same_user and not _artefacts_exist(existing_same_user):
         # Stale DB row – clean it up so we can re-parse cleanly
+        # 1) Drop the convenience FK from ResumePDF -> JobDescriptionPDF
+        existing_same_user.jd_id = None  # breaks ResumePDF -> JD FK
+        # 2) Delete child JobDescriptionPDF rows that point back to this resume
+        for jd_row in list(existing_same_user.job_descriptions):
+            db.delete(jd_row)
+        # Flush the above changes so the dependency graph is linear
+        db.commit()
+
+        # 3) Safe to delete the stale resume row now that no cycles exist
         db.delete(existing_same_user)
         db.commit()
 
@@ -94,7 +104,23 @@ def upload_resume_sync(
     pdf_path.write_bytes(file_bytes)
 
     # 3) Parse
-    df = extract_all(pdf_path)
+    try:
+        df = extract_all(pdf_path)
+    except Exception as e:
+        # truly unreadable file
+        pdf_path.unlink(missing_ok=True)          # delete the saved PDF
+        raise HTTPException(
+            status_code=400,
+            detail=f"File could not be parsed: {e}"
+        )
+
+    if df.empty:
+        # No candidate information found – treat as client error
+        pdf_path.unlink(missing_ok=True)          # delete the saved PDF
+        raise HTTPException(
+            status_code=400,
+            detail="Please upload a valid resume PDF."
+        )
 
     # 4) Save CSV
     csv_path = MEDIA_FOLDER / f"{pdf_path.stem}_longlist.csv"
