@@ -196,6 +196,8 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
             or f"CV {idx + 1}"
         )
         
+        age = row.get("Age")
+        lang = row.get("Languages", "")
         gender = row.get("Gender", "")
         nationality = row.get("Nationality", "")
 
@@ -242,6 +244,8 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
                 #f"CV {idx + 1}",
                 row.get("CV ID"),
                 applicant_name,
+                age,
+                lang,
                 highest_degree,
                 yoe,
                 final_score,
@@ -254,7 +258,7 @@ def rank_cvs(job_description, required_experience, required_degree, df, weight_e
     sort_rank = sorted(rankings, key=lambda x: x[4], reverse=True)    
 
     dsr = pd.DataFrame(sort_rank, columns=[
-                'CV', 'Applicant Name', 'Highest Degree', 'YOE', 'Final Score', 'Employment History', 'Gender', 'Nationality'
+                'CV', 'Applicant Name', 'Age', 'Languages', 'Highest Degree', 'YOE', 'Final Score', 'Employment History', 'Gender', 'Nationality'
             ])
     
     dsr.insert(0, 'Rank', range(1, len(df) + 1))

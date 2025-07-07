@@ -110,7 +110,6 @@ class ResetPasswordRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=8)
-    confirm_new_password: str = Field(..., min_length=8)
 
     @validator('new_password')
     def validate_password_strength(cls, v):
@@ -123,11 +122,4 @@ class ChangePasswordRequest(BaseModel):
             raise ValueError('Password must contain at least one digit')
         if not re.search(r'[^A-Za-z0-9]', v):
             raise ValueError('Password must contain at least one special character')
-        return v
-
-    @validator('confirm_new_password')
-    def passwords_match(cls, v, values):
-        """Validate that new passwords match."""
-        if 'new_password' in values and v != values['new_password']:
-            raise ValueError('New passwords do not match')
         return v

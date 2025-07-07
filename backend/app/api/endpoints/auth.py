@@ -39,7 +39,6 @@ class ResendOTPRequest(BaseModel):
 class PasswordResetLinkRequest(BaseModel):
     token: str
     new_password: str
-    confirm_password: str
 
 router = APIRouter()
 
@@ -234,7 +233,7 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     db.add(reset_entry)
     db.commit()
 
-    reset_url = f"http://localhost:4200/reset-password?token={token}"
+    reset_url = f"http://3.6.143.181:8503/reset-password?token={token}"
 
     try:
         send_email(
@@ -251,9 +250,7 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
 @router.post("/change-password")
 async def change_password_via_link(payload: PasswordResetLinkRequest, db: Session = Depends(get_db)) -> Any:
     """reset the password of user"""
-    if payload.new_password != payload.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-
+    # Removed redundant confirm password check handled on frontend
     try:
         payload_data = jwt.decode(payload.token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload_data.get("sub")

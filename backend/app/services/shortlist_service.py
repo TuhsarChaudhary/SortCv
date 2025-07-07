@@ -36,19 +36,8 @@ else:
 # Ensure the directory exists
 MEDIA_FOLDER.mkdir(parents=True, exist_ok=True)
 
-# ---------------------------------------------------------------------------
-# Running heavy work without blocking the event-loop
-# ---------------------------------------------------------------------------
-# We keep the original (blocking) implementation as `shortlist_sync` and expose an
-# async wrapper that executes it in a background thread via `asyncio.to_thread`.
-#
-#   • Incoming HTTP handler awaits the async wrapper – this releases control
-#     back to the event-loop while the real work runs in the thread-pool.
-#   • No extra infrastructure is required (zero-dep option A).
 
-# ---------------------------------------------------------------------------
-# Blocking implementation (moved from original `shortlist`)
-# ---------------------------------------------------------------------------
+# Running heavy work without blocking the event-loop
 
 def shortlist_sync(
     *,
@@ -75,10 +64,9 @@ def shortlist_sync(
 
     filtered_df = pd.read_csv(csv_source)
 
-    # --------------------------------------------------------------
     # Compute JD hash & dedup row lookup **before** saving the file
-    # --------------------------------------------------------------
     # Prevent directory traversal in user-provided filenames
+    
     jd_filename = os.path.basename(jd_filename)
     jd_hash = hashlib.sha256(jd_file_bytes).hexdigest()
     existing_jd = jd_repo.get_by_hash_resume_template(db, jd_hash, resume.id, jd_template)
@@ -98,9 +86,7 @@ def shortlist_sync(
         with open(jd_path, "wb") as f:
             f.write(jd_file_bytes)
 
-    # ------------------------------------------------------------------
     # Obtain relevant JD text (cached or freshly extracted)
-    # ------------------------------------------------------------------
     relevant_section_text: str | None = None
     if existing_jd and existing_jd.relevant_text_path and os.path.isfile(existing_jd.relevant_text_path):
         with open(existing_jd.relevant_text_path, "r", encoding="utf-8") as fh:
